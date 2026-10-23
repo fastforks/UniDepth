@@ -1,3 +1,26 @@
+# UniDepth: faster inference fork
+
+> **You are on `portable`.** Research fork of [lpiccinelli-eth/UniDepth](https://github.com/lpiccinelli-eth/UniDepth) (base `8d8cfe4`, 2025-05-18; `main` mirrors upstream). Two branches:
+> - [`portable`](https://github.com/fastforks/UniDepth/tree/portable): `unidepth.fast.FastDepth(model)`, an fp16 depth-only inference path in plain PyTorch (SDPA attention, final norm only on the used ViT layers, cached position embeddings, no camera-ray / confidence outputs); no build step.
+> - [`cuda-kernels`](https://github.com/fastforks/UniDepth/tree/cuda-kernels): `portable` plus `unidepth.fast.FastDepthMax(model)`: fp16-accumulate GEMMs, head-dim-64 flash attention with fp16 accumulation, fp16-accumulate cuDNN convolutions (needs `pip install nvidia-cudnn-frontend`), NHWC resize / reflect-pad kernels. Prebuilt kernels for sm_80/86/89/90/120 (+ compute_80 PTX); without a matching prebuilt file they are compiled once with nvcc from `$CUDA_HOME`, and any part that cannot load falls back to its `FastDepth` op (`LP_FAST_KERNELS=0` turns the kernels off).
+>
+> Usage: `depth = unidepth.fast.FastDepth(model).infer(rgb, camera)["depth"]` (`FastDepthMax` has the same API; `rgb` uint8 [B,3,H,W] on the GPU, camera optional).
+> Licence, as upstream: CC BY-NC 4.0 (non-commercial; see `LICENSE`). Weights are not included.
+
+`unidepth-v2-vitl14`, UniDepth V2, bilinear interpolation; RTX 5060 Ti 16 GB, torch 2.14.1+cu130, 2026-10-23. Median of 15 runs after 3 warm-ups; memory = torch peak allocated / reserved; Midd-H runs with the GT intrinsics, KITTI without a camera (predicted camera); AbsRel = metric depth against Middlebury-H laser GT (6 scenes, non-occluded, short check, not a full evaluation); TensorRT: not measured.
+
+| version | KITTI ms | Midd-H ms | speed-up at H (vs flags / vs upstream) | peak MB at KITTI (alloc / reserved) | peak MB at H (alloc / reserved) | startup / first call at H | Midd-H AbsRel raw / median-scaled (6 scenes, GT K) | max / mean abs diff vs upstream at H (m) |
+|---|---|---|---|---|---|---|---|---|
+| upstream (fp16 autocast, upstream default) | 130.6 | 132.4 | 1.00x | 2544 / 3114 | 2564 / 3158 | 7.4 s / 0.77 s | 0.1990 / 0.0309 | - |
+| upstream + flags (inference_mode, cudnn.benchmark, TF32) | 129.6 | 131.9 | 1.00x | 2545 / 3074 | 2563 / 3100 | 6.7 s / 1.18 s | 0.1989 / 0.0310 | 0.0167 / 0.00138 |
+| **portable** (`FastDepth`) | 100.6 | 100.9 | 1.31x / 1.31x | 1186 / 1508 | 1187 / 1438 | 6.8 s / 0.57 s | 0.1991 / 0.0310 | 0.0305 / 0.00074 |
+| **cuda-kernels** (`FastDepthMax`) | 62.6 | 62.7 | 2.11x / 2.11x | 1152 / 1358 | 1152 / 1362 | 6.8 s / 0.50 s | 0.1986 / 0.0310 | 0.0783 / 0.00129 |
+| cuda-kernels, LP_FAST_KERNELS=0 (fp16 accumulation only) | 85.5 | 85.7 | 1.54x / 1.54x | 1186 / 1508 | 1187 / 1438 | 6.7 s / 0.58 s | 0.1987 / 0.0310 | 0.0605 / 0.00141 |
+
+upstream = unmodified upstream `model.infer` (its own fp16 autocast). upstream + flags = the same code, driver-side only: torch.inference_mode, cudnn.benchmark=True, TF32 allowed; channels_last / `.half()` not applicable without code changes (the model casts internally); torch.compile not part of the row. Startup = process start to model on the GPU; first call = the cold first call at H.
+
+---
+
 [![arXiv](https://img.shields.io/badge/UniDepthV2%20arXiv-2502.20110-blue?logo=arxiv&color=%23B31B1B)](https://arxiv.org/abs/2502.20110)
 [![arXiv](https://img.shields.io/badge/UniDepthV1%20arXiv-2403.18913-blue?logo=arxiv-v1&color=%23B31B1B)](https://arxiv.org/abs/2403.18913)
 [![ProjectPage](https://img.shields.io/badge/Project_Page-UniDepth-blue)](https://lpiccinelli-eth.github.io/pub/unidepth/)
