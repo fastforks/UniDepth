@@ -1,6 +1,6 @@
 # UniDepth: faster inference fork
 
-> **You are on `portable`.** Research fork of [lpiccinelli-eth/UniDepth](https://github.com/lpiccinelli-eth/UniDepth) (base `8d8cfe4`, 2025-05-18; `main` mirrors upstream). Two branches:
+> **You are on `cuda-kernels`.** Research fork of [lpiccinelli-eth/UniDepth](https://github.com/lpiccinelli-eth/UniDepth) (base `8d8cfe4`, 2025-05-18; `main` mirrors upstream). Two branches:
 > - [`portable`](https://github.com/fastforks/UniDepth/tree/portable): `unidepth.fast.FastDepth(model)`, an fp16 depth-only inference path in plain PyTorch (SDPA attention, final norm only on the used ViT layers, cached position embeddings, no camera-ray / confidence outputs); no build step.
 > - [`cuda-kernels`](https://github.com/fastforks/UniDepth/tree/cuda-kernels): `portable` plus `unidepth.fast.FastDepthMax(model)`: fp16-accumulate GEMMs, head-dim-64 flash attention with fp16 accumulation, fp16-accumulate cuDNN convolutions (needs `pip install nvidia-cudnn-frontend`), NHWC resize / reflect-pad kernels. Prebuilt kernels for sm_80/86/89/90/120 (+ compute_80 PTX); without a matching prebuilt file they are compiled once with nvcc from `$CUDA_HOME`, and any part that cannot load falls back to its `FastDepth` op (`LP_FAST_KERNELS=0` turns the kernels off).
 >
